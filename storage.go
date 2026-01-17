@@ -58,9 +58,14 @@ func (c *PostgresStorage) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		case "hosts":
 			// Parse comma-separated hosts
 			c.Hosts = strings.Split(value, ",")
-			for i := range c.Hosts {
-				c.Hosts[i] = strings.TrimSpace(c.Hosts[i])
+			filtered := c.Hosts[:0]
+			for _, h := range c.Hosts {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					filtered = append(filtered, h)
+				}
 			}
+			c.Hosts = filtered
 		case "port":
 			c.Port = value
 		case "user":
@@ -90,14 +95,21 @@ func (c *PostgresStorage) Provision(ctx caddy.Context) error {
 
 	// Load Environment
 	if c.Host == "" && len(c.Hosts) == 0 {
-		c.Host = os.Getenv("POSTGRES_HOST")
-		// Also check for POSTGRES_HOSTS for multi-host support
+		// Check for POSTGRES_HOSTS first (multi-host support)
 		hostsEnv := os.Getenv("POSTGRES_HOSTS")
 		if hostsEnv != "" {
 			c.Hosts = strings.Split(hostsEnv, ",")
-			for i := range c.Hosts {
-				c.Hosts[i] = strings.TrimSpace(c.Hosts[i])
+			filtered := c.Hosts[:0]
+			for _, h := range c.Hosts {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					filtered = append(filtered, h)
+				}
 			}
+			c.Hosts = filtered
+		} else {
+			// Fall back to single host if POSTGRES_HOSTS is not set
+			c.Host = os.Getenv("POSTGRES_HOST")
 		}
 	}
 	if c.Port == "" {

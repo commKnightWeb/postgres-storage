@@ -232,7 +232,7 @@ func TestLockLocks(t *testing.T) {
 }
 
 func TestLockExpires(t *testing.T) {
-	storage := setupWithOptions(t, Options{LockTimeout: 100 * time.Millisecond})
+	storage := setupWithOptions(t, time.Second*3, 100*time.Millisecond)
 	ctx := context.Background()
 	key := "testkey"
 	defer storage.Unlock(key)

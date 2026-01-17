@@ -30,7 +30,8 @@ require (
 	github.com/golang/protobuf v1.5.2 // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/klauspost/cpuid/v2 v2.1.1 // indirect
-	github.com/lib/pq v1.10.4
+	github.com/jackc/pgx/v5 v5.5.1
+	github.com/jackc/pgx/v5/stdlib v5.5.1
 	github.com/libdns/libdns v0.2.1 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/mholt/acmez v1.0.4 // indirect

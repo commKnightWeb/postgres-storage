@@ -7,12 +7,13 @@ import (
 	"io/fs"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/caddyserver/caddy/v2"
 	"github.com/caddyserver/caddy/v2/caddyconfig/caddyfile"
 	"github.com/caddyserver/certmagic"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 	"go.uber.org/zap"
 )
 
@@ -26,7 +27,8 @@ type PostgresStorage struct {
 	QueryTimeout     time.Duration `json:"query_timeout,omitempty"`
 	LockTimeout      time.Duration `json:"lock_timeout,omitempty"`
 	Database         *sql.DB       `json:"-"`
-	Host             string        `json:"host,omitempty"`
+	Host             string        `json:"host,omitempty"`   // Single host (deprecated, use Hosts for multi-host)
+	Hosts            []string      `json:"hosts,omitempty"`  // Multiple hosts for high availability
 	Port             string        `json:"port,omitempty"`
 	User             string        `json:"user,omitempty"`
 	Password         string        `json:"password,omitempty"`
@@ -53,6 +55,17 @@ func (c *PostgresStorage) UnmarshalCaddyfile(d *caddyfile.Dispenser) error {
 		switch key {
 		case "host":
 			c.Host = value
+		case "hosts":
+			// Parse comma-separated hosts
+			c.Hosts = strings.Split(value, ",")
+			filtered := c.Hosts[:0]
+			for _, h := range c.Hosts {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					filtered = append(filtered, h)
+				}
+			}
+			c.Hosts = filtered
 		case "port":
 			c.Port = value
 		case "user":
@@ -81,8 +94,23 @@ func (c *PostgresStorage) Provision(ctx caddy.Context) error {
 	c.logger = ctx.Logger(c)
 
 	// Load Environment
-	if c.Host == "" {
-		c.Host = os.Getenv("POSTGRES_HOST")
+	if c.Host == "" && len(c.Hosts) == 0 {
+		// Check for POSTGRES_HOSTS first (multi-host support)
+		hostsEnv := os.Getenv("POSTGRES_HOSTS")
+		if hostsEnv != "" {
+			c.Hosts = strings.Split(hostsEnv, ",")
+			filtered := c.Hosts[:0]
+			for _, h := range c.Hosts {
+				h = strings.TrimSpace(h)
+				if h != "" {
+					filtered = append(filtered, h)
+				}
+			}
+			c.Hosts = filtered
+		} else {
+			// Fall back to single host if POSTGRES_HOSTS is not set
+			c.Host = os.Getenv("POSTGRES_HOST")
+		}
 	}
 	if c.Port == "" {
 		c.Port = os.Getenv("POSTGRES_PORT")
@@ -136,12 +164,24 @@ func NewStorage(c PostgresStorage) (certmagic.Storage, error) {
 	if len(c.ConnectionString) > 0 {
 		connStr = c.ConnectionString
 	} else {
+		// Determine which host(s) to use
+		var hostStr string
+		if len(c.Hosts) > 0 {
+			// Use multiple hosts (pgx format: host1,host2,host3)
+			hostStr = strings.Join(c.Hosts, ",")
+		} else if c.Host != "" {
+			// Use single host (backward compatibility)
+			hostStr = c.Host
+		} else {
+			return nil, fmt.Errorf("no host or hosts specified")
+		}
+
 		connStr_fmt := "host=%s port=%s user=%s password=%s dbname=%s sslmode=%s"
 		// Set each value dynamically w/ Sprintf
-		connStr = fmt.Sprintf(connStr_fmt, c.Host, c.Port, c.User, c.Password, c.DBname, c.SSLmode)
+		connStr = fmt.Sprintf(connStr_fmt, hostStr, c.Port, c.User, c.Password, c.DBname, c.SSLmode)
 	}
 
-	database, err := sql.Open("postgres", connStr)
+	database, err := sql.Open("pgx", connStr)
 	if err != nil {
 		return nil, err
 	}

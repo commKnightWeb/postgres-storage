@@ -12,27 +12,30 @@ import (
 	"time"
 
 	"github.com/caddyserver/certmagic"
-	_ "github.com/lib/pq"
+	_ "github.com/jackc/pgx/v5/stdlib"
 )
 
 func setup(t *testing.T) *PostgresStorage {
-	return setupWithOptions(t, Options{})
+	return setupWithOptions(t, time.Second*3, time.Minute)
 }
 
-func setupWithOptions(t *testing.T, options Options) *PostgresStorage {
+func setupWithOptions(t *testing.T, queryTimeout, lockTimeout time.Duration) *PostgresStorage {
 	connStr := os.Getenv("CONN_STR")
 	if connStr == "" {
 		t.Skipf("must set CONN_STR")
 	}
-	db, err := sql.Open("postgres", connStr)
+	
+	config := PostgresStorage{
+		ConnectionString: connStr,
+		QueryTimeout:     queryTimeout,
+		LockTimeout:      lockTimeout,
+	}
+	
+	storage, err := NewStorage(config)
 	if err != nil {
 		t.Fatal(err)
 	}
-	storage, err := NewStorage(db, options)
-	if err != nil {
-		t.Fatal(err)
-	}
-	return storage
+	return storage.(*PostgresStorage)
 }
 
 func dropTable() {
@@ -41,7 +44,7 @@ func dropTable() {
 		log.Println("must set CONN_STR")
 		return
 	}
-	db, err := sql.Open("postgres", connStr)
+	db, err := sql.Open("pgx", connStr)
 	if err != nil {
 		log.Fatal(err)
 	}

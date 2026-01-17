@@ -4,14 +4,20 @@
 
 SQL storage for CertMagic/Caddy TLS data.
 
-Currently supports PostgreSQL but it'd be pretty easy to support other RDBs like
-SQLite and MySQL. Please make a pull-request if you add support for them and I'll
-gladly merge.
+Currently supports PostgreSQL using pgx driver with multi-host support for high availability.
 
 Now with support for Caddyfile and environment configuration.
 
+# Features
+- PostgreSQL support using pgx driver
+- Multi-host configuration for high availability and failover
+- Connection string or individual parameter configuration
+- Environment variable support
+- Caddyfile configuration support
+
 # Example
 - Valid values for sslmode are: disable, require, verify-ca, verify-full
+- Multi-host format: `host1,host2,host3` or `host1:port1,host2:port2,host3:port3`
 
 ## With vanilla JSON config file and single connection string:
 ```json
@@ -27,7 +33,7 @@ Now with support for Caddyfile and environment configuration.
 }
 ```
 
-## With vanilla JSON config file and separate fields:
+## With vanilla JSON config file and separate fields (single host):
 ```json
 {
   "storage": {
@@ -46,7 +52,26 @@ Now with support for Caddyfile and environment configuration.
 }
 ```
 
-With Caddyfile:
+## With vanilla JSON config file and multiple hosts (high availability):
+```json
+{
+  "storage": {
+    "module": "postgres",
+    "dbname": "cdn_manager",
+    "hosts": ["ocv5p4.easypanel.host", "backup1.easypanel.host", "backup2.easypanel.host"],
+    "password": "4106969cd260dbbb75f9",
+    "port": "5445",
+    "sslmode": "disable",
+    "user": "postgres",
+    "disable_ddl": false
+  },
+  "app": {
+    ...
+  }
+}
+```
+
+With Caddyfile (single host):
 ```Caddyfile
 # Global Config
 
@@ -57,7 +82,7 @@ With Caddyfile:
   }
 }
 ```
-or 
+or
 ```Caddyfile
 {
   storage postgres {
@@ -72,7 +97,22 @@ or
 }
 ```
 
-From Environment:
+With Caddyfile (multiple hosts for high availability):
+```Caddyfile
+{
+  storage postgres {
+    dbname cdn_manager
+    hosts ocv5p4.easypanel.host,backup1.easypanel.host,backup2.easypanel.host
+    password 4106969cd260dbbb75f9
+    port 5445
+    sslmode disable
+    user postgres
+    disable_ddl false
+  }
+}
+```
+
+From Environment (single host):
 ```text
 POSTGRES_CONN_STRING
 POSTGRES_DISABLE_DDL
@@ -86,6 +126,17 @@ POSTGRES_PASSWORD
 POSTGRES_DBNAME
 POSTGRES_SSLMODE
 POSTGRES_DISABLE_DDL
+```
+
+From Environment (multiple hosts):
+```text
+POSTGRES_HOSTS=host1,host2,host3
+POSTGRES_PORT=5432
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=yourpassword
+POSTGRES_DBNAME=yourdb
+POSTGRES_SSLMODE=disable
+POSTGRES_DISABLE_DDL=false
 ```
 
 Configuring with labels for usage with Swarm and docker-proxy (https://github.com/lucaslorentz/caddy-docker-proxy):
